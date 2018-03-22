@@ -1,12 +1,12 @@
 {
   "name": "node_api",
   "version": "1.0.0",
-  "description": "For API in Node js",
+  "description": "A simple DAPP to access erc20 tokens and to perform multiple operations on tokens..",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "Amit Dhaka",
+  "author": "Nitesh Chaudhry",
   "license": "ISC",
   "dependencies": {
     "body-parser": "^1.18.2",
