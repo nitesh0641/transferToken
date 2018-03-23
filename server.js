@@ -33,8 +33,6 @@ router.get('/', function(req, res){
 //   next()
 // }
 
-
-
 router.get('/dlpt', function(req, res){
 	if(typeof web3 !== "undefined" && typeof web3.currentProvider !== "undefined") {
         var web3 = new Web3(web3.currentProvider);
@@ -43,18 +41,19 @@ router.get('/dlpt', function(req, res){
 		// fallback - use your fallback strategy (local node / hosted node + in-dapp id mgmt / fail)
 		console.log('No web3? You should consider trying MetaMask!')
 		web3 = new Web3(new Web3.providers.HttpProvider("http://136.243.38.66:8545"));
+		web3.personal.unlockAccount(web3.eth.accounts[0], 'Default@123', 15000)
 	}
 	addr = web3.eth.accounts[0];
 
 	//-- dealing with tokens--//
-	var token = web3.eth.contract(contractABI).at(contractAddress);
-	var web3Message = "Coinname is => "+tokens.tName(token);
-	web3Message += " Token balance of "+addr+" is "+tokens.tBalance(token, addr);
+	var dlptToken = web3.eth.contract(contractABI).at(contractAddress);
+	var web3Message = "Coinname is => "+tokens.tName(dlptToken);
+	web3Message += " Token balance of "+addr+" is "+tokens.tBalance(dlptToken, addr);
 
 	res.json({message: web3Message});
 });
 
-router.get('/trxcoin', function(req, res){
+router.post('approveAccount', function(req, res){
 	if(typeof web3 !== "undefined" && typeof web3.currentProvider !== "undefined") {
         var web3 = new Web3(web3.currentProvider);
 	} else {
@@ -62,22 +61,46 @@ router.get('/trxcoin', function(req, res){
 		// fallback - use your fallback strategy (local node / hosted node + in-dapp id mgmt / fail)
 		console.log('No web3? You should consider trying MetaMask!')
 		web3 = new Web3(new Web3.providers.HttpProvider("http://136.243.38.66:8545"));
+		web3.personal.unlockAccount(web3.eth.accounts[0], 'Default@123', 15000)
+	}
+	addr = web3.eth.accounts[0];
+
+	//-- dealing with tokens--//
+	var dlptToken = web3.eth.contract(contractABI).at(contractAddress);
+	
+	accOwner = req.body.AccId;
+	coinUnit = req.body.unit;
+	web3Message = tokens.tApproveAcc(dlptToken, accOwner, transferContractAddress, coinUnit);
+
+	res.json({message: web3Message});
+});
+
+router.post('/coinAPI', function(req, res){
+	if(typeof web3 !== "undefined" && typeof web3.currentProvider !== "undefined") {
+        var web3 = new Web3(web3.currentProvider);
+	} else {
+		// set the provider you want from Web3.providers
+		// fallback - use your fallback strategy (local node / hosted node + in-dapp id mgmt / fail)
+		console.log('No web3? You should consider trying MetaMask!')
+		web3 = new Web3(new Web3.providers.HttpProvider("http://136.243.38.66:8545"));
+		web3.personal.unlockAccount(web3.eth.accounts[0], 'Default@123', 15000)
 	}
 	addr = web3.eth.accounts[0];
 
 	//--dealing with my contract--//
 	var trxcoin = web3.eth.contract(transferContractABI).at(transferContractAddress);
-	var web3Message = "Contract address is => "+tokens.cAddress(trxcoin);
+	// var web3Message = "Contract address is => "+tokens.cAddress(trxcoin);
 
-	console.log("req => "+req.query);
+	var fromAddr = req.body.from,
+		toAddr = req.body.to,
+		mainAddr = addr,
+		coinUnit = req.body.unit;
+	// web3Message = " post data => "+fromAddr+", "+toAddr+", "+coinUnit;
+	// web3Message = req.body;
+	// console.log(req.body);
+	web3Message = tokens.cTransfer(trxcoin, mainAddr, fromAddr, toAddr, coinUnit);
 
-	fromAddr = secondAddress
-	toAddr = addr
-	mainAddr = addr
-	coinUnit = 5525
-	// web3Message += ", transfer coin trnsaction hash => "+tokens.cTransfer(trxcoin, mainAddr, fromAddr, toAddr, coinUnit);
-
-	res.json({message: web3Message});
+	res.json({"transactionHash": web3Message});
 });
 
 app.listen(port);
