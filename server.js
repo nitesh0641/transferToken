@@ -3,6 +3,7 @@ var Web3 = require('web3');
 var app = express();
 var bodyParser = require('body-parser');
 var tokens = require('./tools');
+var admin = require('./admin');
 
 //-- ERC20 token contract generic abi
 var contractABI = [{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"","type":"string"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"symbol","outputs":[{"name":"","type":"string"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transfer","outputs":[{"name":"success","type":"bool"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"_from","type":"address"},{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transferFrom","outputs":[{"name":"success","type":"bool"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"_spender","type":"address"},{"name":"_value","type":"uint256"}],"name":"approve","outputs":[{"name":"success","type":"bool"}],"payable":false,"type":"function"},{"constant":true,"inputs":[{"name":"_owner","type":"address"},{"name":"_spender","type":"address"}],"name":"allowance","outputs":[{"name":"remaining","type":"uint256"}],"payable":false,"type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"_from","type":"address"},{"indexed":true,"name":"_to","type":"address"},{"indexed":false,"name":"_value","type":"uint256"}],"name":"Transfer","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"_owner","type":"address"},{"indexed":true,"name":"_spender","type":"address"},{"indexed":false,"name":"_value","type":"uint256"}],"name":"Approval","type":"event"},{"inputs":[{"name":"_initialAmount","type":"uint256"},{"name":"_tokenName","type":"string"},{"name":"_decimalUnits","type":"uint8"},{"name":"_tokenSymbol","type":"string"}],"payable":false,"type":"constructor"},{"constant":false,"inputs":[{"name":"_spender","type":"address"},{"name":"_value","type":"uint256"},{"name":"_extraData","type":"bytes"}],"name":"approveAndCall","outputs":[{"name":"success","type":"bool"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"version","outputs":[{"name":"","type":"string"}],"payable":false,"type":"function"}];
@@ -16,11 +17,21 @@ var transferContractAddress = '0x2d0a862cb09ab8d0585b82f505a399d91d074f93';
 
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(bodyParser.json());
-
 var port = process.env.PORT || 8000;
-
-
 var router = express.Router();
+
+// -- initialise web3 -- //
+if(typeof web3 !== "undefined" && typeof web3.currentProvider !== "undefined") {
+    var web3 = new Web3(web3.currentProvider);
+} else {
+	// set the provider you want from Web3.providers
+	// fallback - use your fallback strategy (local node / hosted node + in-dapp id mgmt / fail)
+	console.log('No web3? You should consider trying MetaMask!')
+	web3 = new Web3(new Web3.providers.HttpProvider("http://136.243.38.66:8545"));
+	web3.personal.unlockAccount(web3.eth.accounts[0], 'Default@123', 15000)
+}
+var addr = web3.eth.accounts[0];
+var web3Message = '';
 
 app.use('/api',router);
 
@@ -33,18 +44,25 @@ router.get('/', function(req, res){
 //   next()
 // }
 
-router.get('/dlpt', function(req, res){
-	if(typeof web3 !== "undefined" && typeof web3.currentProvider !== "undefined") {
-        var web3 = new Web3(web3.currentProvider);
-	} else {
-		// set the provider you want from Web3.providers
-		// fallback - use your fallback strategy (local node / hosted node + in-dapp id mgmt / fail)
-		console.log('No web3? You should consider trying MetaMask!')
-		web3 = new Web3(new Web3.providers.HttpProvider("http://136.243.38.66:8545"));
-		web3.personal.unlockAccount(web3.eth.accounts[0], 'Default@123', 15000)
-	}
-	addr = web3.eth.accounts[0];
+// -- admin part -- //
+router.post('/newAccount', function(req, res){
+	password = req.body.newPass;
+	var web3Message = admin.accountOpen(web3, password);
 
+	res.json({wallet_id: web3Message});
+});
+
+router.post('/sendFund', function(req, res) {
+	from = req.body.from;
+	to = req.body.to;
+	unit = req.body.unit;
+	web3Message = admin.transfer(web3, from, to, unit);
+
+	res.json({transactionHash: web3Message});
+});
+
+// -- token part -- //
+router.get('/dlpt', function(req, res){
 	//-- dealing with tokens--//
 	var dlptToken = web3.eth.contract(contractABI).at(contractAddress);
 	var web3Message = "Coinname is => "+tokens.tName(dlptToken);
@@ -53,40 +71,20 @@ router.get('/dlpt', function(req, res){
 	res.json({message: web3Message});
 });
 
-router.post('approveAccount', function(req, res){
-	if(typeof web3 !== "undefined" && typeof web3.currentProvider !== "undefined") {
-        var web3 = new Web3(web3.currentProvider);
-	} else {
-		// set the provider you want from Web3.providers
-		// fallback - use your fallback strategy (local node / hosted node + in-dapp id mgmt / fail)
-		console.log('No web3? You should consider trying MetaMask!')
-		web3 = new Web3(new Web3.providers.HttpProvider("http://136.243.38.66:8545"));
-		web3.personal.unlockAccount(web3.eth.accounts[0], 'Default@123', 15000)
-	}
-	addr = web3.eth.accounts[0];
-
+router.post('/approveAccount', function(req, res){
 	//-- dealing with tokens--//
 	var dlptToken = web3.eth.contract(contractABI).at(contractAddress);
 	
-	accOwner = req.body.AccId;
+	accOwner = req.body.accId;
+	accPass = req.body.accPass;
 	coinUnit = req.body.unit;
+	web3.personal.unlockAccount(accOwner, accPass, 15000);
 	web3Message = tokens.tApproveAcc(dlptToken, accOwner, transferContractAddress, coinUnit);
 
 	res.json({message: web3Message});
 });
 
 router.post('/coinAPI', function(req, res){
-	if(typeof web3 !== "undefined" && typeof web3.currentProvider !== "undefined") {
-        var web3 = new Web3(web3.currentProvider);
-	} else {
-		// set the provider you want from Web3.providers
-		// fallback - use your fallback strategy (local node / hosted node + in-dapp id mgmt / fail)
-		console.log('No web3? You should consider trying MetaMask!')
-		web3 = new Web3(new Web3.providers.HttpProvider("http://136.243.38.66:8545"));
-		web3.personal.unlockAccount(web3.eth.accounts[0], 'Default@123', 15000)
-	}
-	addr = web3.eth.accounts[0];
-
 	//--dealing with my contract--//
 	var trxcoin = web3.eth.contract(transferContractABI).at(transferContractAddress);
 	// var web3Message = "Contract address is => "+tokens.cAddress(trxcoin);
